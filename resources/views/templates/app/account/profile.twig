@@ -1,0 +1,240 @@
+{% extends "/layouts/main.twig" %}
+
+{% block title p__('title', 'Account')|title %}
+{% set xdata %}
+account({{ user|json_encode }})
+{% endset %}
+
+{% set apiEnabled = false %}
+{% if user.role == 'admin' and option.features.admin_api.is_enabled is defined and option.features.admin_api.is_enabled %}
+{% set apiEnabled = true %}
+{% elseif option.features.api.is_enabled is defined and option.features.api.is_enabled %}
+{% set apiEnabled = true %}
+{% endif %}
+
+{% block template %}
+<x-form>
+  <form class="flex flex-col gap-8" @submit.prevent="submit" x-ref="form">
+    <div>
+      {% include "snippets/back.twig" with {link: 'app', label: p__('button', 'Dashboard')} %}
+
+      <h1 class="mt-4">{{ p__('heading', 'Account') }}</h1>
+      <x-uuid>{{ user.id }}</x-uuid>
+    </div>
+
+    <section class="grid gap-6 md:grid-cols-2 box" data-density="comfortable">
+      <div>
+        <label for="first_name">{{ p__('label', 'First name') }}</label>
+
+        <input type="text" id="first_name" name="first_name" class="mt-2 input"
+          autocomplete="off" value="{{ user.first_name }}"
+          placeholder="{{ user.first_name }}" required />
+      </div>
+
+      <div>
+        <label for="last_name">{{ p__('label', 'Last name') }}</label>
+
+        <input type="text" id="last_name" name="last_name" class="mt-2 input"
+          autocomplete="off" value="{{ user.last_name }}"
+          placeholder="{{ user.last_name }}" required />
+      </div>
+
+      <div>
+        <label for="language">{{ p__('label', 'Language') }}</label>
+
+        <select name="language" id="language" class="input">
+          {% for locale in locales %}
+          {% if locale.enabled %}
+          <option value="{{ locale.name }}"
+            {{ locale.name == user.language ? 'selected' : '' }}>
+            {{ locale.label }}</option>
+          {% endif %}
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <div class="flex justify-between items-center">
+          <label for="email" class="inline-flex gap-2 items-center">
+            {{ p__('label', 'Email') }}
+
+            {% if user.is_email_verified %}
+            <span class="text-xs text-success">{{ __('Verified') }}</span>
+            {% elseif option.site.email_verification_policy is defined and option.site.email_verification_policy in ['relaxed', 'strict']  %}
+            <a href="app/account/verification"
+              class="text-xs text-failure hover:underline">
+              {{ p__('button', 'Verify email') }}
+            </a>
+            {% endif %}
+          </label>
+
+          <a href="app/account/email"
+            class="text-xs font-semibold hover:underline">
+            {{ p__('button', 'Change email') }}
+          </a>
+        </div>
+
+        <input type="text" id="email" class="mt-2 input" autocomplete="off"
+          placeholder="{{ user.email }}" value="{{ user.email }}" disabled />
+      </div>
+
+      {% if apiEnabled %}
+      <div class="md:col-span-2">
+        <div class="flex flex-col gap-4 box">
+          <div class="flex flex-col gap-4 md:items-center md:flex-row">
+            <div class="flex gap-4 items-center">
+              <span
+                class="flex justify-center items-center w-10 h-10 rounded-lg bg-intermediate text-intermediate-content">
+                <i class="ti ti-key"></i>
+              </span>
+
+              <template x-if="user.api_key">
+                <div>
+                  <div class="font-medium">
+                    {{ __('API Key') }}
+                  </div>
+
+                  <x-copy class="mt-1 badge" :data-copy="user.api_key">
+                    <span x-text="user.api_key"></span>
+                  </x-copy>
+                </div>
+              </template>
+
+              <template x-if="!user.api_key">
+                <div>
+                  <div class="text-sm text-content-dimmed">
+                    {{ __('Click to Generate button to create an API key') }}
+                  </div>
+                </div>
+              </template>
+            </div>
+
+            <button type="button"
+              class="md:ml-auto button button-outline button-sm"
+              @click="user.api_key ? modal.open('api-confirmation-modal') : generateApiKey"
+              :processing="generatingApiKey">
+              {% include "/snippets/spinner.twig" %}
+
+              <span
+                x-text="user.api_key ? `{{ p__('button', 'Regenerate') }}` : `{{ p__('button', 'Generate') }}`"></span>
+            </button>
+          </div>
+
+          <hr>
+
+          <div>
+            <a href="/app/api-docs" target="_blank"
+              class="text-xs text-content-dimmed hover:text-content">
+              {{ p__('button', 'Documentation') }}
+
+              <i class="text-xs ti ti-external-link"></i>
+            </a>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="md:col-span-2">
+        <button type="submit" class="w-full button" :processing="isProcessing">
+
+          {% include "/snippets/spinner.twig" %}
+
+          {{ p__('button', 'Save changes') }}
+        </button>
+      </div>
+
+      <div class="flex gap-1 items-center text-sm md:col-span-2">
+        <i class="text-xl ti ti-lock"></i>
+
+        <a
+          href="app/account/password">{{ p__('button', 'Change password') }}</a>
+      </div>
+
+      <div class="text-xs sm:col-span-2 text-content-dimmed">
+        {% set provider %}
+        <a href="https://en.gravatar.com/" target="_blank">
+          Gravatar <i class="text-xs ti ti-external-link"></i>
+        </a>
+        {% endset %}
+
+        {{ __('Profile images are provided by %s', provider)|raw }}
+      </div>
+    </section>
+  </form>
+</x-form>
+
+{% if apiEnabled %}
+<modal-element name="api-confirmation-modal">
+  <form class="flex flex-col gap-8 modal" @submit.prevent>
+    <div class="flex justify-between items-center">
+      <h2 class="text-xl">{{ p__('heading', 'New Api Key') }}</h2>
+
+      <button
+        class="flex justify-center items-center w-8 h-8 rounded-full border border-transparent bg-line-dimmed hover:border-line"
+        @click="modal.close()" type="button">
+        <i class="text-xl ti ti-x"></i>
+      </button>
+    </div>
+
+    <p class="mt-2 text-sm">
+      {{ __('Do you really want to generate a new API key? Current key will be replaced and will no longer be usable.') }}
+    </p>
+
+    <div class="flex items-center">
+      <button class="w-full button" type="button" @click="generateApiKey"
+        :processing="generatingApiKey">
+        {% include "/snippets/spinner.twig" %}
+        {{ p__('button', 'Generate new key') }}
+      </button>
+    </div>
+  </form>
+</modal-element>
+
+<modal-element name="api-modal">
+  <form class="flex flex-col gap-8 modal" @submit.prevent>
+    <div class="flex justify-between items-center">
+      <h2 class="text-xl">{{ p__('heading', 'New Api Key') }}</h2>
+
+      <button
+        class="flex justify-center items-center w-8 h-8 rounded-full border border-transparent bg-line-dimmed hover:border-line"
+        @click="modal.close()" type="button">
+        <i class="text-xl ti ti-x"></i>
+      </button>
+    </div>
+
+    <div>
+      <label>{{ p__('label', 'Api Key') }}</label>
+
+      <div class="relative mt-2" x-data="{isVisible: false}">
+        <input type="text" class="pr-10 input" readonly x-model="user.api_key">
+
+        <button type="button"
+          class="absolute right-3 top-1/2 text-2xl -translate-y-1/2 text-content-dimmed">
+          <x-copy data-msg="URL copied to clipboard"
+            data-tippy-placement="right" :data-copy="user.api_key">
+            <ti class="ti ti-copy"></ti>
+          </x-copy>
+        </button>
+      </div>
+    </div>
+
+    <div>
+      <div class="flex gap-1 items-center text-sm font-bold">
+        <i class="text-lg ti ti-info-square-rounded"></i>
+        {{ __('Important') }}
+      </div>
+
+      <p class="mt-2 text-sm">
+        {{ __('Keep this secret key in a safe and accessible place. For security purposes, it will not be viewable again through your account. If you lose it, you will have to generate a new one.') }}
+      </p>
+    </div>
+
+    <div class="flex items-center">
+      <button class="w-full button" type="button" @click="modal.close()">
+        {{ p__('button', 'I copied the key, close') }}
+      </button>
+    </div>
+  </form>
+</modal-element>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,18 @@
+Greetings
+{{ option.site.name is defined and option.site.name ? 'from ' ~ option.site.name : '' }},
+
+<p>You've been invited to be a member of the workspace {{ workspace.name }}
+  {{ option.site.name is defined and option.site.name ? 'on the ' ~ option.site.name : '' }}.
+</p>
+
+<p>
+  Click the link below to accept the invitation: <br>
+  <a href="{{ accept_invitation_url }}">Accept Invitation</a>
+</p>
+
+<p>If you don't recognize this, you may safely ignore it.</p>
+
+<p>
+  Warm regards, <br>
+  {{ option.site.name ?? '' }} team
+</p>

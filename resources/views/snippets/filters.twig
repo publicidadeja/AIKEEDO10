@@ -1,0 +1,227 @@
+{% set search = search ?? true %}
+{% set filters = filters ?? [] %}
+
+<div class="hidden md:block"
+  x-data="lc({{(filters ?? [])|json_encode}}, {{(sort ?? [])|json_encode}})">
+  <div
+    class="flex gap-3 items-center p-3 rounded-xl border border-line-dimmed group/wrp">
+    {% if search %}
+    <div
+      class="relative w-5 overflow-hidden shrink-0 group group-[:focus-within:has([type=search]:focus)]/wrp:grow"
+      :class="{'grow': filters.length == 0 || (filters.length < 3 && (!sort || sort.length < 1))}">
+      <input type="search" name="query" placeholder="{{ __('Search...') }}"
+        class="block p-0 pl-7 w-full h-8 bg-transparent border-none appearance-none cursor-pointer placeholder:text-content-dimmed focus:outline-none focus:ring-0 focus:cursor-text peer text-content"
+        autocomplete="off" x-model="params.query">
+
+      <i
+        class="absolute left-0 text-xl -translate-y-1/2 pointer-events-none ti ti-search top-1/2 text-content-dimmed group-hover:text-content peer-[:not(:placeholder-shown)]:text-content peer-focus:text-content"></i>
+    </div>
+    {% endif %}
+
+    {% if search is empty and filters is empty %}
+    {% if total is defined or hidden is defined %}
+    <div class="flex gap-1 items-center px-3">
+      {% if total is defined %}
+      <template x-if="all === null">
+        <div class="w-24 h-4 rounded-md loading">
+        </div>
+      </template>
+
+      <template x-if="all !== null">
+        <div class="text-xs text-content-dimmed">
+          {{ total|replace({':count': '<span x-text="all"></span>'})|raw }}
+        </div>
+      </template>
+      {% endif %}
+
+      {% if showHidden is defined %}
+      <template x-if="all > total">
+        <i class="text-xs ti ti-slash text-content-super-dimmed"></i>
+      </template>
+
+      <template x-if="all > total">
+        <a :href="window.location.pathname + '?all'"
+          class="text-xs text-content-dimmed hover:text-content hover:underline"
+          x-tooltip.raw="{{ __('Click to show all') }}">
+          {{ __(":count hidden")|replace({':count': '<span x-text="all-total"></span>'})|raw }}
+        </a>
+      </template>
+      {% endif %}
+    </div>
+    {% endif %}
+    {% endif %}
+
+    <template x-if="filters.length > 0">
+      <div class="flex gap-4 items-center"
+        :class="{'group-[:focus-within:has([type=search]:focus)]/wrp:hidden': filters.length > 2 || (sort && sort.length > 0)}">
+        {% if search %}
+        <span class="block h-6 border-l border-l-line-dimmed"
+          x-show="sort && sort.length > 0"></span>
+        {% endif %}
+
+        <div class="flex flex-wrap gap-2 items-center">
+          <template x-for="f in filters">
+            <template x-if="!f.hidden">
+              <div class="relative z-30 group" x-data
+                :data-selected="params[f.model] && f.options.length > 0"
+                @click.outside="$refs.filter.removeAttribute('data-open')">
+
+                <button
+                  class="relative whitespace-nowrap flex items-center gap-1 px-2 h-8 text-sm border border-transparent rounded-lg text-content-dimmed group-data-[selected]:border-line hover:group-data-[selected]:border-line disabled:opacity-50"
+                  @click="$refs.filter.toggleAttribute('data-open')"
+                  x-tooltip="f.label" :disabled="f.options.length < 1">
+
+                  <i
+                    class="text-xl ti ti-square-rounded-plus-filled group-data-[selected]:hidden"></i>
+
+                  <i class="hidden text-xl text-content ti ti-square-rounded-x-filled group-data-[selected]:block transition-all hover:scale-125 hover:rotate-90"
+                    @click.stop="params[f.model]=null"></i>
+
+                  <span x-text="f.label"
+                    class="group-data-[selected]:hidden"></span>
+
+                  <span
+                    class="hidden group-data-[selected]:inline text-content font-medium"
+                    x-text="f.options.find(o => o.value == params[f.model])?.label"></span>
+
+                  <svg
+                    class="absolute top-0 left-0 w-full h-full rounded-lg text-line-dimmed group-hover:text-line group-data-[selected]:hidden"
+                    width="100%" height="100%" fill="none"
+                    xmlns="http://www.w3.org/2000/svg">
+                    <rect cx="56" width="100%" height="100%"
+                      stroke="currentColor" stroke-dasharray="4 2" rx="8" ry="8"
+                      stroke-width="2" />
+                  </svg>
+                </button>
+
+                <div class="max-h-72 menu menu-bl"
+                  @click="$el.removeAttribute('data-open')" x-ref="filter">
+                  <ul class="text-sm">
+                    <template x-for="option in f.options">
+                      <li>
+                        <button
+                          class="block px-4 py-2 w-full text-left hover:bg-intermediate"
+                          x-text="option.label"
+                          @click="params[f.model]=option.value;">
+                        </button>
+                      </li>
+                    </template>
+                  </ul>
+                </div>
+              </div>
+            </template>
+          </template>
+
+          <template x-for="f in filters">
+            <template x-if="f.hidden && params[f.model]">
+              <div class="relative group" x-data data-selected>
+                <button
+                  class="flex relative gap-1 items-center px-2 h-8 text-sm whitespace-nowrap rounded-lg border text-content border-line hover:border-line"
+                  x-tooltip="f.label">
+
+                  <i class="text-xl transition-all text-content ti ti-square-rounded-x-filled hover:scale-125 hover:rotate-90"
+                    @click.stop="params[f.model]=null"></i>
+
+                  <span x-text="f.label"></span>
+                </button>
+              </div>
+            </template>
+          </template>
+        </div>
+      </div>
+    </template>
+
+    <div class="flex gap-3 items-center ml-auto shrink-0">
+      <template x-if="isFiltered">
+        <button
+          class="flex gap-1 items-center text-sm transition-colors text-content-dimmed hover:text-content"
+          @click="resetFilters()" x-tooltip.raw="{{ p__('button', 'Reset')}}">
+          <i class="text-xl ti ti-x"></i>
+        </button>
+      </template>
+
+      <template x-if="isFiltered && sort && sort.length > 0">
+        <span class="block h-6 border-l border-l-line-dimmed"></span>
+      </template>
+
+      <template x-if="sort && sort.length > 0">
+        <div class="relative ml-auto" x-data
+          @click.outside="$refs.sortel.removeAttribute('data-open')"
+          x-tooltip.raw="{{ p__('label', 'Sort by') }}">
+
+          <input type="hidden" name="sort" x-model="orderby">
+
+          <button
+            class="flex gap-1 items-center px-2 h-8 text-sm rounded-lg border border-transparent hover:border-line"
+            type="button" @click="$refs.sortel.toggleAttribute('data-open')">
+
+            <i class="text-sm ti ti-sort-ascending-2 text-content-dimmed"
+              x-show="dir=='asc'"></i>
+            <i class="text-sm ti ti-sort-descending-2 text-content-dimmed"
+              x-show="dir=='desc'"></i>
+            <span class="mr-1 text-content-dimmed"
+              x-show="!dir">{{ p__('label', 'Sort by') }}:</span>
+
+            <span x-text="sort.find(o => o.value == orderby)?.label">
+            </span>
+
+            <i class="text-xl ti ti-chevron-down"></i>
+          </button>
+
+          <div class="menu" x-ref="sortel"
+            @click="$el.removeAttribute('data-open')">
+
+            <ul class="text-sm">
+              <template x-for="option in sort">
+                <li x-show="option.value != null">
+                  <button
+                    class="flex gap-2 items-center px-4 py-2 w-full text-left hover:bg-intermediate group/option"
+                    @click="dir = (dir=='desc' || dir==null ? 'asc' : 'desc'); orderby=option.value;">
+
+                    <span x-text="option.label"></span>
+
+                    <i class="invisible text-sm text-content-dimmed ti ti-arrow-up group-hover/option:visible"
+                      x-show="orderby!=option.value || dir=='desc'"></i>
+                    <i class="invisible text-sm text-content-dimmed ti ti-arrow-down group-hover/option:visible"
+                      x-show="orderby==option.value && dir=='asc'"></i>
+                  </button>
+                </li>
+              </template>
+            </ul>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  {% if (search or filters is not empty) and (total is defined or hidden is defined) %}
+  <div class="flex gap-1 items-center px-3 mt-3">
+    {% if total is defined %}
+    <template x-if="all === null">
+      <div class="w-24 h-4 rounded-md loading">
+      </div>
+    </template>
+
+    <template x-if="all !== null">
+      <div class="text-xs text-content-dimmed">
+        {{ total|replace({':count': '<span x-text="all"></span>'})|raw }}
+      </div>
+    </template>
+    {% endif %}
+
+    {% if showHidden is defined %}
+    <template x-if="all > total">
+      <i class="text-xs ti ti-slash text-content-super-dimmed"></i>
+    </template>
+
+    <template x-if="all > total">
+      <a :href="window.location.pathname + '?all'"
+        class="text-xs text-content-dimmed hover:text-content hover:underline"
+        x-tooltip.raw="{{ __('Click to show all') }}">
+        {{ __(":count hidden")|replace({':count': '<span x-text="all-total"></span>'})|raw }}
+      </a>
+    </template>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
